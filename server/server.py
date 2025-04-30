@@ -217,6 +217,20 @@ async def stop_capture(request: Request):
         print(f"[ERROR] Failed to stop capture: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+@app.post("/clear-capture")
+async def clear_capture(request: Request):
+    try:
+        payload = await request.json()
+        hostname = payload.get("hostname")
+        if not hostname or hostname not in approved_agents:
+            raise HTTPException(status_code=404, detail="Invalid hostname.")
+        capture_commands[hostname] = "clear"
+        print(f"[CONTROL] Clear capture requested for {hostname}")
+        return {"status": "cleared"}
+    except Exception as e:
+        print(f"[ERROR] Failed to clear capture: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 # ================== APPROVED LIST ==================
 @app.get("/approved")
@@ -251,32 +265,6 @@ def metrics_stream():
 
 # ================== CONTROL ENDPOINTS ==================
 from fastapi import Body
-
-@app.post("/control/start")
-def start_capture(hostname: str = Body(...)):
-    capture_status[hostname] = capture_status.get(hostname, {})
-    capture_status[hostname]["capture"] = True
-    return {"status": "started"}
-
-@app.post("/control/stop")
-def stop_capture(hostname: str = Body(...)):
-    capture_status[hostname] = capture_status.get(hostname, {})
-    capture_status[hostname]["capture"] = False
-    return {"status": "stopped"}
-
-@app.post("/control/reset")
-def reset_capture(hostname: str = Body(...)):
-    capture_status[hostname] = capture_status.get(hostname, {})
-    capture_status[hostname]["reset"] = True
-    return {"status": "reset_requested"}
-
-@app.get("/control/status")
-def get_control_status(hostname: str):
-    # Send current status to the agent
-    status = capture_status.get(hostname, {"capture": False, "reset": False})
-    # Reset the reset flag after it's been sent once
-    capture_status[hostname]["reset"] = False
-    return status
 
 
 if __name__ == "__main__":

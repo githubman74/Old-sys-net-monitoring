@@ -338,10 +338,22 @@ export default function SystemDashboard() {
     });
   };
   
-  const handleClearCapture = () => {
-    setAgentPackets([]);
-    setPacketsCleared(true); // Mark that user has cleared
+  const handleClearCapture = async () => {
+    if (!selectedAgent) return;
+  
+    try {
+      await fetch("http://localhost:8123/clear-capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostname: selectedAgent.hostname }),
+      });
+  
+      setAgentPackets([]); // Optimistically clear in UI
+    } catch (err) {
+      console.error("Failed to clear capture:", err);
+    }
   };
+  
   
   
   const handleSaveCapture = () => {

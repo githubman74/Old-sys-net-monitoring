@@ -88,6 +88,7 @@ def get_captured_packets():
     """
     with _buffer_lock:
         return list(_packet_buffer)
+    
 def reset_packet_buffer():
     with _buffer_lock:
         _packet_buffer.clear()

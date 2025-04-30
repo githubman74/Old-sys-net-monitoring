@@ -134,7 +134,7 @@ def main():
             hostname = get_device_info()['hostname']
 
             try:
-                # Ask server if capture should start/stop
+                # Ask server what to do
                 r = httpx.get(f"{get_server_url()}/commands", params={"hostname": hostname}, timeout=5)
                 cmd = r.json().get("command", "")
 
@@ -148,9 +148,14 @@ def main():
                     stop_sniff()
                     was_running = False
 
+                elif cmd == "clear":
+                    print("[AGENT] Clearing packet buffer")
+                    reset_packet_buffer()
+
             except Exception as e:
                 print(f"[ERROR] Command fetch failed: {e}")
                 time.sleep(3)
+
 
             send_system_info()
             time.sleep(1)
