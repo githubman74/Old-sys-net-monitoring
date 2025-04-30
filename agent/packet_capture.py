@@ -4,11 +4,13 @@ from collections import deque
 from scapy.all import sniff, Ether, IP, TCP, UDP, ICMP, ARP
 
 # Maximum packets to buffer
-MAX_PACKETS = 1000
+MAX_PACKETS = 5000
 
 # Internal rolling buffer and lock
 _packet_buffer = deque(maxlen=MAX_PACKETS)
 _buffer_lock = threading.Lock()
+_sniffer_thread = None
+_sniffer_running = False
 
 # Simple incremental counter
 _packet_counter = 1
@@ -55,21 +57,30 @@ def _process_packet(pkt):
     except Exception:
         pass
 
+_sniffing = False
+
 def start_sniff(iface=None, bpf_filter=None):
-    """
-    Begin background packet capture.
-    """
-    thread = threading.Thread(
-        target=sniff,
-        kwargs={
-            'prn': _process_packet,
-            'store': False,
-            'iface': iface,
-            'filter': bpf_filter,
-        },
-        daemon=True,
-    )
-    thread.start()
+    global _sniffer_thread, _sniffer_running
+
+    if _sniffer_running:
+        return  # Already running, don't start another
+
+    _sniffer_running = True
+
+    def sniff_packets():
+        sniff(
+            prn=_process_packet,
+            store=False,
+            iface=iface,
+            filter=bpf_filter,
+            stop_filter=lambda x: not _sniffer_running
+        )
+
+    _sniffer_thread = threading.Thread(target=sniff_packets, daemon=True)
+    _sniffer_thread.start()
+
+
+
 
 def get_captured_packets():
     """
@@ -77,3 +88,16 @@ def get_captured_packets():
     """
     with _buffer_lock:
         return list(_packet_buffer)
+def reset_packet_buffer():
+    with _buffer_lock:
+        _packet_buffer.clear()
+
+def stop_sniff():
+    """
+    Stop background packet capture.
+    """
+    global _sniffer_running
+    _sniffer_running = False
+    # Wait a moment for sniff thread to finish
+    time.sleep(1)
+
